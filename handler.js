@@ -1,5 +1,6 @@
 import { smsg, protoType } from './lib/simple.js'
-import { fileURLToPath } from 'url'
+import * as economy from './lib/economy.js'
+import { fileURLToPath, pathToFileURL } from 'url'
 import { watchFile, unwatchFile } from 'fs'
 import { Low } from 'lowdb'
 import { JSONFile } from 'lowdb/node'
@@ -18,14 +19,19 @@ const __dirname = global.__dirname(import.meta.url)
 // 1. تحميل الملحقات (Plugins)
 // ============================================================
 global.plugins = {}
-function readPlugins() {
-    let dir = join(__dirname, 'plugins')
-    let files = fs.readdirSync(dir)
+const pluginFolder = join(__dirname, 'plugins')
+
+async function readPlugins() {
+    global.plugins = {}
+    let files = fs.readdirSync(pluginFolder)
     for (let file of files) {
         if (file.endsWith('.js')) {
             try {
-                let module = import(join(dir, file))
-                global.plugins[file] = module
+                const modulePath = pathToFileURL(join(pluginFolder, file)).href + `?update=${Date.now()}`
+                const module = await import(modulePath)
+                if (module.default && module.default.command) {
+                    global.plugins[file] = module.default
+                }
             } catch (e) {
                 console.error(chalk.red(`Error loading plugin ${file}:`), e)
             }
@@ -228,14 +234,14 @@ if (m_.isGroup && global.AUTO_REPLY_MENTION && isMention) {
         }
         
         if (isCmd) {
-            let plugin = null
-            // البحث عن الملحق المطابق
-            for (const name in global.plugins) {
-                const mod = await global.plugins[name]
-                if (mod.default && mod.default.command) {
-                    const commands = Array.isArray(mod.default.command) ? mod.default.command : [mod.default.command]
+            let plugin = global.plugins[command]
+            if (!plugin) {
+                // البحث عن الأمر في جميع الملحقات
+                for (const name in global.plugins) {
+                    const mod = global.plugins[name]
+                    const commands = Array.isArray(mod.command) ? mod.command : [mod.command]
                     if (commands.some(cmd => cmd === command)) {
-                        plugin = mod.default
+                        plugin = mod
                         break
                     }
                 }
@@ -277,9 +283,8 @@ if (m_.isGroup && global.AUTO_REPLY_MENTION && isMention) {
 }
 
 // ============================================================
-// 6. نظام المراقبة الحية (Hot-Reloading) للملحقات
+// 6. نظام المراقبة الحية (Hot-Reloading) للملفات
 // ============================================================
-const pluginFolder = join(__dirname, 'plugins')
 const handlerFile = join(__dirname, 'handler.js')
 
 watchFile(handlerFile, () => {
@@ -295,8 +300,7 @@ function watchPlugins() {
         watchFile(filePath, () => {
             unwatchFile(filePath)
             console.log(chalk.redBright(`\nUpdate: ${filePath}`))
-            global.reloadHandler(false)
-            watchPlugins() // Re-watch after reload
+            readPlugins() // إعادة تحميل الملحقات فقط
         })
     }
 }

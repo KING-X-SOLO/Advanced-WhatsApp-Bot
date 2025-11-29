@@ -1,1 +1,58 @@
-// ============================================================\n// 📋 Menu Command - Interactive List Example\n// ============================================================\n\nexport default {\n    command: 'menu',\n    aliases: ['m', 'help', 'commands'],\n    description: 'عرض قائمة الأوامر المتاحة',\n    category: 'General',\n    usage: '.menu',\n    permission: null,\n    \n    async execute(message, args, bot) {\n        try {\n            const jid = message.key.remoteJid;\n            const categories = bot.commandManager.getAllCategories();\n            \n            // إنشاء أقسام القائمة\n            const sections = categories.map(category => {\n                const commands = bot.commandManager.getCommandsByCategory(category);\n                return {\n                    title: category,\n                    rows: commands.map(cmd => ({\n                        id: cmd.command,\n                        title: cmd.command.toUpperCase(),\n                        description: cmd.description || 'لا يوجد وصف'\n                    }))\n                };\n            });\n            \n            const menuText = `\n╭─── • 𝐒𝐎𝐋𝐎 • ───╮\n│ 📋 *قائمة الأوامر*\n│ \n│ اختر فئة من القائمة\n│ أدناه لعرض الأوامر\n╰─── • 𝐒𝐎𝐋𝐎 • ───╯\n            `.trim();\n            \n            // إرسال القائمة التفاعلية\n            await bot.messageHandler.sendList(\n                jid,\n                menuText,\n                sections,\n                '𝐒𝐎𝐋𝐎 Bot - Menu',\n                '📋 اختر أمر',\n                { quoted: message }\n            );\n            \n        } catch (error) {\n            console.error('Error in menu command:', error);\n            await bot.messageHandler.reply(message, `❌ حدث خطأ: ${error.message}`);\n        }\n    }\n};\n
+// plugins/menu.js
+
+export default {
+    command: ['menu', 'help', 'start', 'm'],
+    name: 'قائمة الأوامر',
+    category: 'General',
+    description: 'عرض قائمة بجميع الأوامر المتاحة.',
+    owner: false,
+    async handler(m, { conn, command, text, args }) {
+        const plugins = global.plugins;
+        const categories = {};
+
+        // تجميع الأوامر حسب الفئة
+        for (const name in plugins) {
+            const plugin = plugins[name];
+            if (plugin.command) {
+                const category = plugin.category || 'Uncategorized';
+                if (!categories[category]) {
+                    categories[category] = [];
+                }
+                const commands = Array.isArray(plugin.command) ? plugin.command : [plugin.command];
+                const isOwnerCommand = plugin.owner || false;
+                
+                categories[category].push({
+                    command: commands[0],
+                    description: plugin.description || 'لا يوجد وصف',
+                    isOwnerCommand: isOwnerCommand
+                });
+            }
+        }
+
+        let menuText = `
+*🤖 ${global.BOT_NAME} - قائمة الأوامر الشاملة*
+*Prefix:* ${global.PREFIX}
+*المطور:* ${global.BOT_AUTHOR}
+
+*مرحباً بك في البوت المتقدم!*
+يمكنك استخدام الأوامر التالية:
+
+`.trim() + '\n\n';
+
+        for (const category in categories) {
+            menuText += `*━━━「 ${category} 」━━━*\n`;
+            for (const cmd of categories[category]) {
+                menuText += `*${global.PREFIX}${cmd.command}* - ${cmd.description} ${cmd.isOwnerCommand ? '👑' : ''}\n`;
+            }
+            menuText += '\n';
+        }
+
+        menuText += `
+*ملاحظة:*
+👑 تعني أن الأمر مخصص للمطورين فقط.
+هذا البوت قيد التطوير الشامل.
+`.trim();
+
+        conn.sendMessage(m.chat, { text: menuText }, { quoted: m });
+    }
+}

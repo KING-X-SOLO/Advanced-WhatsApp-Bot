@@ -62,7 +62,7 @@ global.prefix = new RegExp('^[' + global.PREFIX.replace(/[|\\{}()[\]^$+*?.]/g, '
 // ============================================================
 // 2. نظام قاعدة البيانات (LowDB)
 // ============================================================
-global.db = new Low(new JSONFile(join(__dirname, global.DATABASE_PATH)))
+global.db = new Low(new JSONFile(join(__dirname, global.DATABASE_PATH)), { users: {}, chats: {}, settings: {} })
 global.DATABASE = global.db 
 
 global.loadDatabase = async function loadDatabase() {
